@@ -1,0 +1,59 @@
+
+Names and NetIDs:
+  Yusuf Aminu yta12
+  Tyler Bertrand tjb309
+
+------------------------------------------------------------------------
+TEST PLAN
+------------------------------------------------------------------------
+
+TODO: Fill this in as you test. Describe each scenario and how you
+tested it.
+
+1. Basic command execution
+   - Tested: echo hello, ls, pwd
+   - How: ran ./mysh in interactive mode and batch mode
+
+2. Built-in: cd
+   - Tested: cd with no args (goes to HOME), cd subdir, cd nonexistent
+   - How: checked prompt updated, checked error message on bad dir
+
+3. Built-in: pwd
+   - Tested: pwd output matches actual working directory
+   - How: compared to system pwd
+
+4. Built-in: which
+   - Tested: which ls, which cd (built-in, should fail), which fakeprog
+   - How: checked correct path printed, nothing printed on failure
+
+5. Redirection
+   - Tested: echo hello > out.txt, cat < out.txt, echo hi > a < b
+   - How: checked file contents, verified both orders work
+
+6. Pipes
+   - Tested: ls | grep mysh, echo hello | cat | cat
+   - How: verified output matches expected
+
+7. Wildcards
+   - Tested: echo *.c, echo foo*, echo *.txt (no match)
+   - How: verified expansion and pass-through when no match
+
+8. Comments
+   - Tested: echo hello # this is a comment
+   - How: verified only "hello" is printed
+
+9. Interactive mode prompts and messages
+   - Tested: welcome message, goodbye message, prompt format with ~
+   - How: ran ./mysh manually in terminal
+
+10. Batch mode
+    - Tested: ./mysh script.sh and cat script.sh | ./mysh
+    - How: verified no prompts printed, correct output
+
+11. Exit status reporting (interactive mode)
+    - Tested: a command that fails (false), a command killed by signal
+    - How: verified "Exited with status N" and "Terminated by signal X"
+
+12. Error handling
+    - Tested: syntax errors like "< <", bad redirection files, unknown program
+    - How: verified error messages printed and shell continues
