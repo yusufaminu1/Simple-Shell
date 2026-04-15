@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <ctype.h>
 
 /* =========================================================
  * TOKENIZER
@@ -22,7 +23,26 @@
  * Returns the number of tokens found.
  */
 int tokenize(char *line, char **tokens, int max_tokens) {
-    /* TODO */
+    int count = 0;                                                                          
+    int i = 0;                                                                              
+    while(line[i] != '\0' && count < max_tokens){                                         
+        if(line[i] == '#') break;
+        if(isspace(line[i])){                                                             
+            i++;                                                                          
+            continue;                                                                       
+        }
+        tokens[count++] = &line[i];
+        while(line[i] != '\0' && !isspace(line[i]) && line[i] != '#'){
+            i++;
+        }
+        if(line[i] != '\0' && line[i] != '#'){
+            line[i] = '\0';
+            i++;
+        }else{
+            line[i] = '\0';
+        }
+      }
+      return count;
     return 0;
 }
 
@@ -60,7 +80,13 @@ int expand_wildcards(char **tokens, int count, char **expanded, int max) {
  * Do NOT handle built-ins or paths containing '/' here.
  */
 int find_program(const char *name, char *result) {
-    /* TODO */
+    char *dirs[] = {"/usr/local/bin","/usr/bin","/bin"};
+    for(int i = 0;i<3;i++){
+        snprintf(result,4096,"%s/%s",dirs[i],name);
+        if(access(result,X_OK)==0){
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -159,7 +185,58 @@ int parse_redirection(char **tokens, int count,
  * For built-ins, returns 0 on success, -1 on failure.
  */
 int exec_command(char **args, char *in_file, char *out_file, int interactive) {
-    /* TODO */
+    int arg_count = 0;
+    while(args[arg_count]!=NULL){
+        arg_count++;
+    }
+    if(strcmp(args[0],"cd")==0){
+        return builtin_cd(args+1,arg_count-1);
+    }else if(strcmp(args[0],"pwd")==0){
+        return builtin_pwd();
+    }else if(strcmp(args[0],"which")==0){
+        return builtin_which(args+1,arg_count-1);
+    }else if(strcmp(args[0],"exit")==0){
+        return -2;
+    }
+    char pathbuf[4096];                                                                                                                                                                 
+    if(strchr(args[0], '/') != NULL) {                                                         
+        strcpy(pathbuf, args[0]);                                                               
+    }else{                                                                                    
+      if(find_program(args[0], pathbuf) == 0) {                                              
+            dprintf(STDERR_FILENO, "error: command not found: %s\n", args[0]);
+            return -1;
+      }
+    }
+    pid_t pid = fork();
+    if(pid==-1){
+        perror("fork");
+        return -1;
+    }
+    if(pid==0){
+        if (in_file != NULL) {                                                                      
+            int fd = open(in_file, O_RDONLY);                                                       
+            if (fd == -1) { perror(in_file); _exit(EXIT_FAILURE); }                                 
+            dup2(fd, STDIN_FILENO);                                                                 
+            close(fd);                                                                            
+        }else if(!interactive) {
+            int fd = open("/dev/null", O_RDONLY);
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+        }
+        if(out_file != NULL) {
+            int fd = open(out_file, O_WRONLY | O_CREAT | O_TRUNC, 0640);
+            if (fd == -1) { perror(out_file); _exit(EXIT_FAILURE); }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
+        execv(pathbuf, args);
+        perror(args[0]);
+        _exit(EXIT_FAILURE);
+    }else{
+        int status;                                                                                 
+        waitpid(pid, &status, 0);                                                                   
+        return status;
+    }
     return -1;
 }
 
@@ -221,7 +298,21 @@ int run_command(char **tokens, int count, int interactive) {
  * Use getcwd() and getenv("HOME").
  */
 void print_prompt(int interactive) {
-    /* TODO */
+    if(interactive==0){
+        return;
+    }
+    char cwd[4096];
+    getcwd(cwd,sizeof(cwd));
+    char *home = getenv("HOME");
+    if(home!= NULL && strncmp(cwd,home,strlen(home))==0){
+        write(STDOUT_FILENO,"~",1);
+        char *remainder = cwd+strlen(home);
+        write(STDOUT_FILENO,remainder,strlen(remainder));
+    }else{
+        write(STDOUT_FILENO,cwd,strlen(cwd));
+    }
+    write(STDOUT_FILENO,"$ ",2);
+    
 }
 
 /*
@@ -233,8 +324,16 @@ void print_prompt(int interactive) {
  * Returns the number of bytes read (0 on EOF).
  */
 int read_line(int fd, char *buf, int max) {
-    /* TODO */
-    return 0;
+    int i = 0;
+    while(i<max-1){
+        int r = read(fd,&buf[i],1);
+        if(r==0 || buf[i]=='\n'){
+            break;
+        }
+        i++;
+    }
+    buf[i]='\0';
+    return i;
 }
 
 /* =========================================================
@@ -261,7 +360,7 @@ int main(int argc, char *argv[]) {
     }
     interactive = (argc == 1) && isatty(STDIN_FILENO);
     if(interactive){
-        write(STDOUT_FILENO, "Welcome to my shell\n",21);
+        write(STDOUT_FILENO, "Welcome to my shell\n",20);
     }
 
 
@@ -280,8 +379,8 @@ int main(int argc, char *argv[]) {
         if (!keep_going) break;
     }
 
-    /* TODO: if interactive, print goodbye message */
-    /* TODO: if fd != STDIN_FILENO, close(fd) */
+    if (interactive) write(STDOUT_FILENO, "Exiting my shell\n", 17);                            
+    if (fd != STDIN_FILENO) close(fd); 
 
     return EXIT_SUCCESS;
 }
