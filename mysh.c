@@ -8,9 +8,6 @@
 #include <dirent.h>
 #include <ctype.h>
 
-/* =========================================================
- * TOKENIZER
- * ========================================================= */
 
 /*
  * tokenize(line, tokens, max_tokens)
@@ -46,9 +43,7 @@ int tokenize(char *line, char **tokens, int max_tokens) {
     return 0;
 }
 
-/* =========================================================
- * WILDCARD EXPANSION
- * ========================================================= */
+
 
 /*
  * expand_wildcards(tokens, count, expanded, max)
@@ -66,9 +61,7 @@ int expand_wildcards(char **tokens, int count, char **expanded, int max) {
     return 0;
 }
 
-/* =========================================================
- * PROGRAM RESOLUTION
- * ========================================================= */
+
 
 /*
  * find_program(name, result)
@@ -90,9 +83,7 @@ int find_program(const char *name, char *result) {
     return 0;
 }
 
-/* =========================================================
- * BUILT-IN COMMANDS
- * ========================================================= */
+
 
 /*
  * builtin_cd(args, count)
@@ -134,9 +125,7 @@ int builtin_which(char **args, int count) {
     return 0;
 }
 
-/* =========================================================
- * REDIRECTION HELPERS
- * ========================================================= */
+
 
 /*
  * parse_redirection(tokens, count, args, arg_count, in_file, out_file)
@@ -156,9 +145,7 @@ int parse_redirection(char **tokens, int count,
     return 0;
 }
 
-/* =========================================================
- * PROCESS EXECUTION
- * ========================================================= */
+
 
 /*
  * exec_command(args, in_file, out_file, interactive)
@@ -262,9 +249,7 @@ int exec_pipeline(char ***segments, int seg_count, int interactive) {
     return -1;
 }
 
-/* =========================================================
- * COMMAND DISPATCH
- * ========================================================= */
+
 
 /*
  * run_command(tokens, count, interactive)
@@ -286,9 +271,7 @@ int run_command(char **tokens, int count, int interactive) {
     return 1;
 }
 
-/* =========================================================
- * INPUT LOOP
- * ========================================================= */
+
 
 /*
  * print_prompt(interactive)
@@ -336,9 +319,6 @@ int read_line(int fd, char *buf, int max) {
     return i;
 }
 
-/* =========================================================
- * MAIN
- * ========================================================= */
 
 int main(int argc, char *argv[]) {
     int fd;
@@ -364,7 +344,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    /* Main loop */
+    
     char line[4096];
     char *tokens[256];
     while (1) {
