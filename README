@@ -1,59 +1,113 @@
+Yusuf Aminu (yta12)
+Tyler Bertrand (tjb309)
 
-Names and NetIDs:
-  Yusuf Aminu yta12
-  Tyler Bertrand tjb309
-
-------------------------------------------------------------------------
 TEST PLAN
-------------------------------------------------------------------------
 
-TODO: Fill this in as you test. Describe each scenario and how you
-tested it.
+
+Our testing strategy was to build and test incrementally, verifying each
+feature before moving on to the next. We tested both interactive and
+batch modes for each scenario.
 
 1. Basic command execution
    - Tested: echo hello, ls, pwd
-   - How: ran ./mysh in interactive mode and batch mode
+   - How: ran ./mysh in interactive mode, verified correct output
 
-2. Built-in: cd
-   - Tested: cd with no args (goes to HOME), cd subdir, cd nonexistent
-   - How: checked prompt updated, checked error message on bad dir
+2. Batch mode (file argument)
+   - Tested: ./mysh myscript.sh where myscript.sh contains "echo hello"
+   - How: verified "hello" printed with no prompts or welcome message
 
-3. Built-in: pwd
-   - Tested: pwd output matches actual working directory
-   - How: compared to system pwd
+3. Batch mode (stdin pipe)
+   - Tested: echo "echo hello" | ./mysh
+   - How: verified "hello" printed with no prompts
 
-4. Built-in: which
-   - Tested: which ls, which cd (built-in, should fail), which fakeprog
-   - How: checked correct path printed, nothing printed on failure
+4. Interactive mode messages and prompt
+   - Tested: welcome message on startup, goodbye on exit, prompt format
+   - How: ran ./mysh manually, checked "Welcome to my shell!" printed,
+     prompt shows current directory with ~ for home prefix,
+     "Exiting my shell" printed on exit
 
-5. Redirection
-   - Tested: echo hello > out.txt, cat < out.txt, echo hi > a < b
-   - How: checked file contents, verified both orders work
+5. Built-in: cd
+   - Tested: cd (no args goes to HOME), cd subdir, cd /tmp,
+     cd nonexistent (error), cd a b (too many args)
+   - How: checked prompt updated after cd, error message on failure
 
-6. Pipes
-   - Tested: ls | grep mysh, echo hello | cat | cat
-   - How: verified output matches expected
+6. Built-in: pwd
+   - Tested: pwd output, pwd > out.txt (redirection)
+   - How: compared output to actual working directory
 
-7. Wildcards
-   - Tested: echo *.c, echo foo*, echo *.txt (no match)
-   - How: verified expansion and pass-through when no match
+7. Built-in: which
+   - Tested: which ls, which echo, which cd (built-in, should fail),
+     which fakeprog (not found, should fail)
+   - How: verified correct path printed, nothing printed on failure
 
-8. Comments
-   - Tested: echo hello # this is a comment
-   - How: verified only "hello" is printed
+8. External command with path
+   - Tested: /bin/ls, ./mysh (nested shell)
+   - How: verified correct execution
 
-9. Interactive mode prompts and messages
-   - Tested: welcome message, goodbye message, prompt format with ~
-   - How: ran ./mysh manually in terminal
+9. Unknown command
+   - Tested: fakecommand
+   - How: verified error message printed, shell continues
 
-10. Batch mode
-    - Tested: ./mysh script.sh and cat script.sh | ./mysh
-    - How: verified no prompts printed, correct output
+10. Input redirection
+    - Tested: cat < file.txt
+    - How: verified file contents printed to stdout
 
-11. Exit status reporting (interactive mode)
-    - Tested: a command that fails (false), a command killed by signal
-    - How: verified "Exited with status N" and "Terminated by signal X"
+11. Output redirection
+    - Tested: echo hello > out.txt
+    - How: verified file created with correct contents
 
-12. Error handling
-    - Tested: syntax errors like "< <", bad redirection files, unknown program
-    - How: verified error messages printed and shell continues
+12. Both redirections
+    - Tested: cat < in.txt > out.txt, also in reverse order (> before <)
+    - How: verified both orderings work identically
+
+13. Redirection error
+    - Tested: cat < nonexistent.txt
+    - How: verified error message printed, shell continues
+
+14. Pipes (two processes)
+    - Tested: ls | grep mysh, echo hello | cat
+    - How: verified output flows correctly between processes
+
+15. Pipes (three or more processes)
+    - Tested: ls | cat | cat, echo hello | cat | cat | cat
+    - How: verified full pipeline output is correct
+
+16. Wildcards (match)
+    - Tested: echo *.c, ls *.c
+    - How: verified tokens expanded to matching filenames
+
+17. Wildcards (no match)
+    - Tested: echo *.xyz
+    - How: verified token passed through unchanged as "*.xyz"
+
+18. Wildcards (hidden files)
+    - Tested: echo *.txt where .hidden.txt exists
+    - How: verified .hidden.txt not included in matches
+
+19. Wildcards (path prefix)
+    - Tested: echo subdir/*.c
+    - How: verified files in subdirectory expanded correctly
+
+20. Comments
+    - Tested: echo hello # this is a comment
+    - How: verified only "hello" printed, comment ignored
+
+21. Empty line
+    - Tested: pressing enter on blank line
+    - How: verified shell does nothing and reprints prompt
+
+22. Exit status reporting (interactive mode)
+    - Tested: false (exits with status 1)
+    - How: verified "Exited with status 1" printed before next prompt
+
+23. Signal termination reporting (interactive mode)
+    - Tested: a program killed by SIGKILL
+    - How: verified "Terminated by signal X" printed with signal description
+
+24. Exit command
+    - Tested: exit, also foo | exit
+    - How: verified shell terminates after current job completes
+
+25. Syntax errors
+    - Tested: < <, > (no filename following)
+    - How: verified error printed, shell skips to next command
