@@ -20,13 +20,13 @@
  * Returns the number of tokens found.
  */
 int tokenize(char *line, char **tokens, int max_tokens) {
-    int count = 0;                                                                          
-    int i = 0;                                                                              
-    while(line[i] != '\0' && count < max_tokens){                                         
+    int count = 0;
+    int i = 0;
+    while(line[i] != '\0' && count < max_tokens){
         if(line[i] == '#') break;
-        if(isspace(line[i])){                                                             
-            i++;                                                                          
-            continue;                                                                       
+        if(isspace(line[i])){
+            i++;
+            continue;
         }
         tokens[count++] = &line[i];
         while(line[i] != '\0' && !isspace(line[i]) && line[i] != '#'){
@@ -57,8 +57,82 @@ int tokenize(char *line, char **tokens, int max_tokens) {
  * Returns the new token count.
  */
 int expand_wildcards(char **tokens, int count, char **expanded, int max) {
-    /* TODO */
-    return 0;
+  int exp_count = 0;
+
+  for (int i = 0; i < count && exp_count < max; i++) {
+    if (strchr(tokens[i], '*') == NULL) {
+      expanded[exp_count++] = tokens[i];
+      continue;
+    }
+
+    char dir_part[4096];
+    char *pattern;
+    char *last_slash = strrchr(tokens[i], '/');
+
+    if (last_slash == NULL) {
+      strcpy(dir_part, ".");
+      pattern = tokens[i];
+    } else {
+      int dir_len = last_slash - tokens[i];
+      strncpy(dir_part, tokens[i], dir_len);
+      dir_part[dir_len] = '\0';
+      pattern = last_slash + 1;
+    }
+
+    char *star = strchr(pattern, '*');
+    int prefix_len = star - pattern;
+    char *suffix = star + 1;
+    int suffix_len = strlen(suffix);
+
+    DIR *dir = opendir(dir_part);
+    if (dir == NULL) {
+      expanded[exp_count++] = tokens[i];
+      continue;
+  }
+
+    char *matches[1024];
+    int match_count = 0;
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) {
+        char *name = entry->d_name;
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) continue;
+        if (prefix_len == 0 && name[0] == '.') continue; // skip hidden
+
+        int name_length = strlen(name);
+        if (name_length < prefix_len + suffix_len) continue;
+        if (strncmp(name, pattern, prefix_len) != 0) continue;
+        if (suffix_len > 0 && strcmp(name + name_length - suffix_len, suffix) != 0) continue;
+
+        char *full = malloc(strlen(dir_part) + 1 + name_length + 1);
+        if (strcmp(dir_part, ".") == 0) {
+          strcpy(full, name);
+        } else {
+          sprintf(full, "%s/%s", dir_part, name);
+        }
+        matches[match_count++] = full;
+    }
+    closedir(dir);
+
+    if (match_count == 0) {
+      expanded[exp_count++] = tokens[i];
+    } else {
+      for (int a = 0; a < match_count - 1; a++) {
+        for (int b = a + 1; b < match_count; b++) {
+            if (strcmp(matches[a], matches[b]) > 0) {
+              char *tmp = matches[a];
+              matches[a] = matches[b];
+              matches[b] = tmp;
+            }
+          }
+        }
+      for (int j = 0; j < match_count && exp_count < max; j++) {
+        expanded[exp_count++] = matches[j];
+      }
+    }
+  }
+  return exp_count;
+
 }
 
 
@@ -95,8 +169,23 @@ int find_program(const char *name, char *result) {
  * Use chdir(). Print error and return 0 on failure, 1 on success.
  */
 int builtin_cd(char **args, int count) {
-    /* TODO */
-    return 0;
+    if (count == 0) {
+      if(chdir(getenv("HOME")) == -1) {
+        perror("cd");
+        return 0;
+      }
+     }
+    else if (count == 1) {
+      if(chdir(args[0]) == -1) {
+        perror("cd");
+        return 0;
+      }
+    }
+    else {
+      dprintf(STDERR_FILENO, "cd: too many arguments\n");
+      return 0;
+    }
+    return 1;
 }
 
 /*
@@ -106,8 +195,14 @@ int builtin_cd(char **args, int count) {
  * Returns 1 on success, 0 on failure.
  */
 int builtin_pwd(void) {
-    /* TODO */
-    return 0;
+    char buf[4096];
+    if(getcwd(buf, sizeof(buf)) == NULL) {
+      perror("pwd");
+      return 0;
+    }
+    write(STDOUT_FILENO, buf, strlen(buf));
+    write(STDOUT_FILENO, "\n", 1);
+    return 1;
 }
 
 /*
@@ -121,8 +216,15 @@ int builtin_pwd(void) {
  * Uses find_program() internally.
  */
 int builtin_which(char **args, int count) {
-    /* TODO */
-    return 0;
+  char path[4096];
+    if(count != 1) { return 0; }
+    if(strcmp(args[0], "cd") == 0 || strcmp(args[0], "pwd") == 0 || strcmp(args[0], "which") == 0 || strcmp(args[0], "exit") == 0) {
+      return 0;
+    }
+    if(find_program(args[0], path) == 0) { return 0; }
+    write(STDOUT_FILENO, path, strlen(path));
+    write(STDOUT_FILENO, "\n", 1);
+    return 1;
 }
 
 
@@ -141,8 +243,31 @@ int builtin_which(char **args, int count) {
 int parse_redirection(char **tokens, int count,
                       char **args, int *arg_count,
                       char **in_file, char **out_file) {
-    /* TODO */
-    return 0;
+    *in_file = NULL;
+    *out_file = NULL;
+    *arg_count = 0;
+    for(int i = 0; i < count; i++) {
+      if(strcmp(tokens[i], ">") == 0) {
+        if(i + 1 >= count ) {
+          dprintf(STDERR_FILENO, "syntax error: expected filename after %s\n", tokens[i]);
+          return 0;
+        }
+        *out_file = tokens[i+1];
+        i++;
+      } else if(strcmp(tokens[i], "<") == 0) {
+        if(i + 1 >= count) {
+          dprintf(STDERR_FILENO, "syntax error: expected filename after %s\n", tokens[i]);
+          return 0;
+        }
+        *in_file = tokens[i+1];
+        i++;
+      } else {
+        args[*arg_count] = tokens[i];
+        (*arg_count)++;
+      }
+    }
+    args[*arg_count] = NULL;
+    return 1;
 }
 
 
@@ -185,11 +310,11 @@ int exec_command(char **args, char *in_file, char *out_file, int interactive) {
     }else if(strcmp(args[0],"exit")==0){
         return -2;
     }
-    char pathbuf[4096];                                                                                                                                                                 
-    if(strchr(args[0], '/') != NULL) {                                                         
-        strcpy(pathbuf, args[0]);                                                               
-    }else{                                                                                    
-      if(find_program(args[0], pathbuf) == 0) {                                              
+    char pathbuf[4096];
+    if(strchr(args[0], '/') != NULL) {
+        strcpy(pathbuf, args[0]);
+    }else{
+      if(find_program(args[0], pathbuf) == 0) {
             dprintf(STDERR_FILENO, "error: command not found: %s\n", args[0]);
             return -1;
       }
@@ -200,11 +325,11 @@ int exec_command(char **args, char *in_file, char *out_file, int interactive) {
         return -1;
     }
     if(pid==0){
-        if (in_file != NULL) {                                                                      
-            int fd = open(in_file, O_RDONLY);                                                       
-            if (fd == -1) { perror(in_file); _exit(EXIT_FAILURE); }                                 
-            dup2(fd, STDIN_FILENO);                                                                 
-            close(fd);                                                                            
+        if (in_file != NULL) {
+            int fd = open(in_file, O_RDONLY);
+            if (fd == -1) { perror(in_file); _exit(EXIT_FAILURE); }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
         }else if(!interactive) {
             int fd = open("/dev/null", O_RDONLY);
             dup2(fd, STDIN_FILENO);
@@ -220,8 +345,8 @@ int exec_command(char **args, char *in_file, char *out_file, int interactive) {
         perror(args[0]);
         _exit(EXIT_FAILURE);
     }else{
-        int status;                                                                                 
-        waitpid(pid, &status, 0);                                                                   
+        int status;
+        waitpid(pid, &status, 0);
         return status;
     }
     return -1;
@@ -245,8 +370,66 @@ int exec_command(char **args, char *in_file, char *out_file, int interactive) {
  * Returns the exit status of the last child, or -1 on error.
  */
 int exec_pipeline(char ***segments, int seg_count, int interactive) {
-    /* TODO */
-    return -1;
+  int pipes[64][2];
+  pid_t pids[64];
+  int num_pipes = seg_count - 1;
+
+  for(int i = 0; i < num_pipes; i++) {
+    if(pipe(pipes[i]) == -1) {
+      perror("pipe");
+      return -1;
+    }
+  }
+  for(int i = 0; i < seg_count; i++) {
+    pids[i] = fork();
+    if (pids[i] == -1) {
+      perror("fork");
+      return -1;
+    }
+    if(pids[i] == 0) {
+      if(i > 0) {
+        dup2(pipes[i-1][0], STDIN_FILENO);
+      } else if (!interactive) {
+        int fd = open("/dev/null", O_RDONLY);
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+      }
+      if(i < seg_count - 1) {
+        dup2(pipes[i][1], STDOUT_FILENO);
+      }
+      for(int j = 0; j < num_pipes; j++) {
+        close(pipes[j][0]);
+        close(pipes[j][1]);
+      }
+      char pathbuf[4096];
+      if(strchr(segments[i][0], '/')) {
+        strcpy(pathbuf, segments[i][0]);
+      } else {
+        if(!find_program(segments[i][0], pathbuf)) {
+          dprintf(STDERR_FILENO, "error: command not found: %s\n", segments[i][0]);
+          _exit(EXIT_FAILURE);
+        }
+      }
+      execv(pathbuf, segments[i]);
+      perror(segments[i][0]);
+      _exit(EXIT_FAILURE);
+    }
+  }
+
+  for(int i = 0; i < num_pipes; i++) {
+    close(pipes[i][0]);
+    close(pipes[i][1]);
+  }
+
+  int last_status = 0;
+  for(int i = 0; i < seg_count; i++) {
+    int status;
+    waitpid(pids[i], &status, 0);
+    if(i == seg_count - 1) {
+      last_status = status;
+    }
+  }
+  return last_status;
 }
 
 
@@ -267,8 +450,55 @@ int exec_pipeline(char ***segments, int seg_count, int interactive) {
  * Returns 1 normally, 0 if the command was `exit` (signals main loop to stop).
  */
 int run_command(char **tokens, int count, int interactive) {
-    /* TODO */
-    return 1;
+  char *args[256];
+  int arg_count = 0;
+  char *in_file, *out_file;
+  if(count == 0) { return 1; }
+  int has_pipe = 0;
+  char *expanded[1024];
+  count = expand_wildcards(tokens, count, expanded, 1024);
+  tokens = expanded;
+  for(int i = 0; i < count; i++){
+    if(strcmp(tokens[i], "|") == 0) {
+      has_pipe = 1;
+      break;
+    }
+  }
+  if (has_pipe) {
+    char **segments[64];
+    char *seg_args[64][256];
+    int seg_count = 0;
+    int seg_start = 0;
+
+    for (int i = 0; i <= count; i++) {
+      if (i == count || strcmp(tokens[i], "|") == 0) {
+        int len = i - seg_start;
+        for (int j = 0; j < len; j++) {
+          seg_args[seg_count][j] = tokens[seg_start + j];
+        }
+        seg_args[seg_count][len] = NULL;
+        segments[seg_count] = seg_args[seg_count];
+        seg_count++;
+        seg_start = i + 1;
+      }
+    }
+    int status = exec_pipeline(segments, seg_count, interactive);
+    if (status == -2) return 0;
+} else {
+    if (!parse_redirection(tokens, count, args, &arg_count, &in_file, &out_file)) {
+      return 1;
+    }
+    int status = exec_command(args, in_file, out_file, interactive);
+    if (status == -2) return 0;
+    if (interactive) {
+      if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+        dprintf(STDOUT_FILENO, "Exited with status %d\n", WEXITSTATUS(status));
+      } else if (WIFSIGNALED(status)) {
+        dprintf(STDOUT_FILENO, "Terminated by signal %d\n", WTERMSIG(status));
+      }
+    }
+  }
+  return 1;
 }
 
 
@@ -295,7 +525,7 @@ void print_prompt(int interactive) {
         write(STDOUT_FILENO,cwd,strlen(cwd));
     }
     write(STDOUT_FILENO,"$ ",2);
-    
+
 }
 
 /*
@@ -321,7 +551,7 @@ int read_line(int fd, char *buf, int max) {
 
 
 int main(int argc, char *argv[]) {
-    int fd;
+    int fd = STDIN_FILENO;
     int interactive;
 
     if(argc > 2){
@@ -336,7 +566,7 @@ int main(int argc, char *argv[]) {
 
     }else if(argc == 1){
         fd = STDIN_FILENO;
-        
+
     }
     interactive = (argc == 1) && isatty(STDIN_FILENO);
     if(interactive){
@@ -344,7 +574,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    
+
     char line[4096];
     char *tokens[256];
     while (1) {
@@ -359,8 +589,8 @@ int main(int argc, char *argv[]) {
         if (!keep_going) break;
     }
 
-    if (interactive) write(STDOUT_FILENO, "Exiting my shell\n", 17);                            
-    if (fd != STDIN_FILENO) close(fd); 
+    if (interactive) write(STDOUT_FILENO, "Exiting my shell\n", 17);
+    if (fd != STDIN_FILENO) close(fd);
 
     return EXIT_SUCCESS;
 }
