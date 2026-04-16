@@ -8,106 +8,106 @@ Our testing strategy was to build and test incrementally, verifying each
 feature before moving on to the next. We tested both interactive and
 batch modes for each scenario.
 
-1. Basic command execution
+Basic command execution
    - Tested: echo hello, ls, pwd
    - How: ran ./mysh in interactive mode, verified correct output
 
-2. Batch mode (file argument)
-   - Tested: ./mysh myscript.sh where myscript.sh contains "echo hello"
+Batch mode (file argument)
+   - Tested: ./mysh t01_basic.sh where t01_basic.sh contains "echo hello"
    - How: verified "hello" printed with no prompts or welcome message
 
-3. Batch mode (stdin pipe)
+Batch mode (stdin pipe)
    - Tested: echo "echo hello" | ./mysh
    - How: verified "hello" printed with no prompts
 
-4. Interactive mode messages and prompt
+Interactive mode messages and prompt
    - Tested: welcome message on startup, goodbye on exit, prompt format
    - How: ran ./mysh manually, checked "Welcome to my shell!" printed,
      prompt shows current directory with ~ for home prefix,
      "Exiting my shell" printed on exit
 
-5. Built-in: cd
+Built-in: cd
    - Tested: cd (no args goes to HOME), cd subdir, cd /tmp,
      cd nonexistent (error), cd a b (too many args)
    - How: checked prompt updated after cd, error message on failure
 
-6. Built-in: pwd
+Built-in: pwd
    - Tested: pwd output, pwd > out.txt (redirection)
    - How: compared output to actual working directory
 
-7. Built-in: which
+Built-in: which
    - Tested: which ls, which echo, which cd (built-in, should fail),
      which fakeprog (not found, should fail)
    - How: verified correct path printed, nothing printed on failure
 
-8. External command with path
+External command with path
    - Tested: /bin/ls, ./mysh (nested shell)
    - How: verified correct execution
 
-9. Unknown command
+Unknown command
    - Tested: fakecommand
    - How: verified error message printed, shell continues
 
-10. Input redirection
+Input redirection
     - Tested: cat < file.txt
     - How: verified file contents printed to stdout
 
-11. Output redirection
+Output redirection
     - Tested: echo hello > out.txt
     - How: verified file created with correct contents
 
-12. Both redirections
+Both redirections
     - Tested: cat < in.txt > out.txt, also in reverse order (> before <)
     - How: verified both orderings work identically
 
-13. Redirection error
+Redirection error
     - Tested: cat < nonexistent.txt
     - How: verified error message printed, shell continues
 
-14. Pipes (two processes)
+Pipes (two processes)
     - Tested: ls | grep mysh, echo hello | cat
     - How: verified output flows correctly between processes
 
-15. Pipes (three or more processes)
+Pipes (three or more processes)
     - Tested: ls | cat | cat, echo hello | cat | cat | cat
     - How: verified full pipeline output is correct
 
-16. Wildcards (match)
+Wildcards (match)
     - Tested: echo *.c, ls *.c
     - How: verified tokens expanded to matching filenames
 
-17. Wildcards (no match)
+Wildcards (no match)
     - Tested: echo *.xyz
     - How: verified token passed through unchanged as "*.xyz"
 
-18. Wildcards (hidden files)
+Wildcards (hidden files)
     - Tested: echo *.txt where .hidden.txt exists
     - How: verified .hidden.txt not included in matches
 
-19. Wildcards (path prefix)
+Wildcards (path prefix)
     - Tested: echo subdir/*.c
     - How: verified files in subdirectory expanded correctly
 
-20. Comments
+Comments
     - Tested: echo hello # this is a comment
     - How: verified only "hello" printed, comment ignored
 
-21. Empty line
+Empty line
     - Tested: pressing enter on blank line
     - How: verified shell does nothing and reprints prompt
 
-22. Exit status reporting (interactive mode)
+Exit status reporting (interactive mode)
     - Tested: false (exits with status 1)
     - How: verified "Exited with status 1" printed before next prompt
 
-23. Signal termination reporting (interactive mode)
+Signal termination reporting (interactive mode)
     - Tested: a program killed by SIGKILL
     - How: verified "Terminated by signal X" printed with signal description
 
-24. Exit command
+Exit command
     - Tested: exit, also foo | exit
     - How: verified shell terminates after current job completes
 
-25. Syntax errors
+Syntax errors
     - Tested: < <, > (no filename following)
     - How: verified error printed, shell skips to next command

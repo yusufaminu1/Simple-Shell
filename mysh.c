@@ -248,14 +248,14 @@ int parse_redirection(char **tokens, int count,
     *arg_count = 0;
     for(int i = 0; i < count; i++) {
       if(strcmp(tokens[i], ">") == 0) {
-        if(i + 1 >= count ) {
+        if(i + 1 >= count || strcmp(tokens[i+1], "<") == 0 || strcmp(tokens[i+1], ">") == 0) {
           dprintf(STDERR_FILENO, "syntax error: expected filename after %s\n", tokens[i]);
           return 0;
         }
         *out_file = tokens[i+1];
         i++;
       } else if(strcmp(tokens[i], "<") == 0) {
-        if(i + 1 >= count) {
+        if(i + 1 >= count || strcmp(tokens[i+1], "<") == 0 || strcmp(tokens[i+1], ">") == 0) {
           dprintf(STDERR_FILENO, "syntax error: expected filename after %s\n", tokens[i]);
           return 0;
         }
@@ -297,27 +297,29 @@ int parse_redirection(char **tokens, int count,
  * For built-ins, returns 0 on success, -1 on failure.
  */
 int exec_command(char **args, char *in_file, char *out_file, int interactive) {
+    if(args[0] == NULL) return -1;
     int arg_count = 0;
     while(args[arg_count]!=NULL){
         arg_count++;
     }
+    /* cd and exit must run in the parent process */
     if(strcmp(args[0],"cd")==0){
         return builtin_cd(args+1,arg_count-1);
-    }else if(strcmp(args[0],"pwd")==0){
-        return builtin_pwd();
-    }else if(strcmp(args[0],"which")==0){
-        return builtin_which(args+1,arg_count-1);
     }else if(strcmp(args[0],"exit")==0){
         return -2;
     }
+    /* pwd and which are forked so they can participate in output redirection */
+    int is_builtin = (strcmp(args[0],"pwd")==0 || strcmp(args[0],"which")==0);
     char pathbuf[4096];
-    if(strchr(args[0], '/') != NULL) {
-        strcpy(pathbuf, args[0]);
-    }else{
-      if(find_program(args[0], pathbuf) == 0) {
-            dprintf(STDERR_FILENO, "error: command not found: %s\n", args[0]);
-            return -1;
-      }
+    if(!is_builtin){
+        if(strchr(args[0], '/') != NULL) {
+            strcpy(pathbuf, args[0]);
+        }else{
+            if(find_program(args[0], pathbuf) == 0) {
+                dprintf(STDERR_FILENO, "error: command not found: %s\n", args[0]);
+                return -1;
+            }
+        }
     }
     pid_t pid = fork();
     if(pid==-1){
@@ -340,6 +342,12 @@ int exec_command(char **args, char *in_file, char *out_file, int interactive) {
             if (fd == -1) { perror(out_file); _exit(EXIT_FAILURE); }
             dup2(fd, STDOUT_FILENO);
             close(fd);
+        }
+        if(is_builtin){
+            int result;
+            if(strcmp(args[0],"pwd")==0) result = builtin_pwd();
+            else result = builtin_which(args+1, arg_count-1);
+            _exit(result ? EXIT_SUCCESS : EXIT_FAILURE);
         }
         execv(pathbuf, args);
         perror(args[0]);
@@ -380,6 +388,11 @@ int exec_pipeline(char ***segments, int seg_count, int interactive) {
       return -1;
     }
   }
+  int has_exit = 0;
+  for(int i = 0; i < seg_count; i++) {
+    if(strcmp(segments[i][0], "exit") == 0) { has_exit = 1; break; }
+  }
+
   for(int i = 0; i < seg_count; i++) {
     pids[i] = fork();
     if (pids[i] == -1) {
@@ -400,6 +413,10 @@ int exec_pipeline(char ***segments, int seg_count, int interactive) {
       for(int j = 0; j < num_pipes; j++) {
         close(pipes[j][0]);
         close(pipes[j][1]);
+      }
+      /* handle exit built-in in pipeline */
+      if(strcmp(segments[i][0], "exit") == 0) {
+        _exit(EXIT_SUCCESS);
       }
       char pathbuf[4096];
       if(strchr(segments[i][0], '/')) {
@@ -429,6 +446,7 @@ int exec_pipeline(char ***segments, int seg_count, int interactive) {
       last_status = status;
     }
   }
+  if(has_exit) return -2;
   return last_status;
 }
 
@@ -484,6 +502,13 @@ int run_command(char **tokens, int count, int interactive) {
     }
     int status = exec_pipeline(segments, seg_count, interactive);
     if (status == -2) return 0;
+    if (interactive) {
+      if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+        dprintf(STDOUT_FILENO, "Exited with status %d\n", WEXITSTATUS(status));
+      } else if (WIFSIGNALED(status)) {
+        dprintf(STDOUT_FILENO, "Terminated by signal %d\n", WTERMSIG(status));
+      }
+    }
 } else {
     if (!parse_redirection(tokens, count, args, &arg_count, &in_file, &out_file)) {
       return 1;
@@ -538,14 +563,20 @@ void print_prompt(int interactive) {
  */
 int read_line(int fd, char *buf, int max) {
     int i = 0;
+    int got_eof = 0;
     while(i<max-1){
         int r = read(fd,&buf[i],1);
-        if(r==0 || buf[i]=='\n'){
+        if(r==0){
+            got_eof = 1;
+            break;
+        }
+        if(buf[i]=='\n'){
             break;
         }
         i++;
     }
     buf[i]='\0';
+    if(got_eof && i==0) return -1;
     return i;
 }
 
@@ -581,7 +612,7 @@ int main(int argc, char *argv[]) {
         print_prompt(interactive);
 
         int n = read_line(fd, line, sizeof(line));
-        if (n == 0) break; /* EOF */
+        if (n == -1) break; /* EOF */
 
         int count = tokenize(line, tokens, 256);
 

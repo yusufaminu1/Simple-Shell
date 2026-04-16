@@ -1,0 +1,2 @@
+fakecommand
+echo still running
